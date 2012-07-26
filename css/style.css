@@ -4,3 +4,9 @@
  * Date: 7/27/12
  * Time: 5:32 AM
  */
+
+#container {
+    width: 300px;
+    height: 200px;
+    overflow: hidden;
+}
