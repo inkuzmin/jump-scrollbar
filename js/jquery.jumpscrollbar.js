@@ -5,14 +5,16 @@
  * Time: 4:39 AM
  */
 
+var b = 0;
+
 (function ($) {
 
     var methods = {
         init:function (options) {
 
             var settings = $.extend({
-                'width':'14',
-                'rander':'raphael' // raphael, native_svg, css_without_images, css_with_images
+                'width':'16',
+                'render':'svg' // svg or css
             }, options);
 
 
@@ -124,6 +126,21 @@
 
             self.settings = self.options.settings;
 
+            self.height = 0;
+            self.scrollHeight = 0;
+
+            self.width = self.settings.width;
+
+
+            self.$scrollbarContainer = {};
+            self.$svg = {};
+
+            self.pimpa = {};
+
+            self.isScrollingInProcess = false;
+
+            self.scroll = 0;
+
 
         },
 
@@ -144,7 +161,8 @@
             if (isScrollbar) {
 
                 self._changeBlockView();
-                self._randerJumpscrollbar();
+                self._createScrollContainer();
+                self._renderJumpscrollbar();
 
             }
 
@@ -162,30 +180,84 @@
 
         },
 
-        _randerJumpscrollbar:function () {
+        _renderJumpscrollbar:function () {
             var self = this;
 
-            if (self.settings.rander === "raphael") {
-                self._randerRaphaelScrollbar();
+            if (self.settings.render === "svg") {
+                self._renderSVGScrollbar();
+
             }
-            else if (self.settings.rander === "native_svg") {
+            else if (self.settings.render === "css") {
                 // Do some stuff
             }
             else {
                 // Do some more stuff
             }
 
+
+            self.scrollHeight = self.root.scrollHeight;
+
         },
 
-
-        _randerRaphaelScrollbar:function () {
+        _renderSVGScrollbar:function () {
             var self = this;
 
-            var $scrollContainer = self._createScrollContainer();
+            var svgNode = self._makeSVGElement("svg", {
+                version:'1.1',
+                width:self.width,
+                height:self.height
+            });
 
-            var paper = Raphael($scrollContainer[0], '100%', '100%');
+            self.$scrollbarContainer.append(svgNode);
+            self.svgNode = svgNode;
 
 
+            /////////
+
+            var self = this;
+
+            var rails = self._makeSVGElement("rect", {
+                x:7,
+                y:7,
+                rx:2,
+                ry:2,
+                width:2,
+                height:(self.height - 14),
+                style:"fill:#bfbfbf;stroke:#7f7f7f;stroke-width:1;",
+                class:'rails'
+            });
+
+            self.rails = rails;
+            self.svgNode.appendChild(rails);
+
+
+            ////////////
+
+            var self = this;
+
+            var khuynyushka = self._makeSVGElement("circle", {
+                cx:8,
+                cy:(self.height / 2),
+                r:7,
+                stroke:"black",
+                'stroke-width':1,
+                fill:"royalblue",
+                class:'khuynyushka'
+            });
+
+            self.svgNode.appendChild(khuynyushka);
+
+            self.khuynyushka = khuynyushka;
+
+
+        },
+
+        _makeSVGElement:function (tag, attrs) {
+
+            var element = document.createElementNS('http://www.w3.org/2000/svg', tag);
+            for (var attr in attrs)
+                element.setAttribute(attr, attrs[attr]);
+            return element;
 
 
         },
@@ -210,7 +282,30 @@
 
             self.$root.after($scrollContainer);
 
-            return $scrollContainer;
+            self.$scrollbarContainer = $scrollContainer;
+
+
+            ////////
+
+
+            var $contentContainer = $('<div />');
+            var cssMap = {
+                height:self.$root.height() + 'px',
+                position:'relative',
+                top:"0px"
+
+            };
+            var attrMap = {
+                class:'contentContainer'
+            };
+            $contentContainer.css(cssMap);
+            $contentContainer.attr(attrMap);
+
+
+            self.$root.wrapInner($contentContainer);
+
+            self.$contentContainer = self.$root.children();
+
         },
 
         _lockDemention:function () {
@@ -218,6 +313,8 @@
 
             self.$root.width(self.$root.width());
             self.$root.height(self.$root.height());
+
+            self.height = self.$root.height();
 
         },
 
@@ -254,7 +351,323 @@
             $(window).bind('resize.jumpscrollbar', self._test);
 
 
+            $(self.khuynyushka).bind('mousedown.jumpscrollbar', function (e) {
+                self._scrollingStart(e)
+            });
+
+            $(document).bind('mousemove.jumpscrollbar', function (e) {
+                self._scrolling(e);
+            });
+
+            $(document).bind('mouseup.jumpscrollbar', function (e) {
+                self._scrollingStop(e);
+            });
+
+            self.$root.bind('mousewheel.jumpscrollbar', function (e) {
+                self._wheel(e);
+            });
+
+            self.$scrollbarContainer.bind('mousedown.jumpscrollbar', function (e) {
+                self._toPosition(e);
+            })
+
+
         },
+
+
+        _toPosition:function (e) {
+            var self = this;
+
+            self.isScrollingInProcess = true;
+            var e = e || window.event;
+
+
+            self.khuynyushka.setAttribute("fill-opacity", "0.5");
+
+            self.y = e.clientY;
+
+            var cy = self.y - self.$root.offset().top;
+
+//            console.log(cy);
+
+            var maxTop = self.height - 7;
+            var minTop = 0 + 7; // TODO: Магические числа - в констаты ( а лучше выводить из ширины )
+
+            if (cy > minTop && cy < maxTop) {
+
+
+                self.khuynyushka.setAttribute("cy",  cy);
+
+
+                self.interval = setInterval(function () {
+                    cy = parseInt(self.khuynyushka.getAttribute("cy"));
+                    self._scrollContent(cy);
+
+                }, 10);
+
+            }
+
+            e.preventDefault();
+
+
+        },
+
+        //$scrollbarContainer
+        _wheel:function (e) {
+            var self = this;
+
+            // TODO: обратную связь в виде подергиваний хуйнюшки в сторону прокрутки
+
+
+            e = e.originalEvent;
+
+            var delta = e.wheelDelta ? e.wheelDelta / 120 : -e.detail / 3;
+
+
+            self.scroll -= delta * 40; // TODO: 40 - в опции
+
+            var maxTop = self.scrollHeight - self.height;
+            var minTop = 0;
+
+            if (self.scroll > minTop && self.scroll < maxTop) {
+
+                self.$contentContainer.css({
+                    top:-self.scroll
+                });
+
+            }
+            else if (self.scroll < minTop) {
+                self.$contentContainer.css({
+                    top:minTop
+                });
+                self.scroll = minTop;
+            }
+            else if (self.scroll > maxTop) {
+                self.$contentContainer.css({
+                    top:-maxTop
+                });
+                self.scroll = maxTop;
+            }
+
+
+            e.preventDefault();
+
+        },
+
+
+        _scrollingStart:function (e) {
+            var self = this;
+            self.isScrollingInProcess = true;
+            var e = e || window.event;
+
+
+            self.khuynyushka.setAttribute("fill-opacity", "0.5");
+
+
+            self.interval = setInterval(function () {
+                cy = parseInt(self.khuynyushka.getAttribute("cy"));
+                self._scrollContent(cy);
+
+            }, 10);
+
+            e.preventDefault();
+            self.y = e.clientY;
+            e.cancelBubble = true;
+            e.stopPropagation();
+            return false;
+        },
+
+        _scrolling:function (e) {
+            var self = this;
+            var e = e || window.event;
+            e.preventDefault();
+
+            if (self.isScrollingInProcess === true) {
+
+
+//                var dy = e.clientY - self.y;
+//
+//                self.y = e.clientY;
+//
+//                if (self.y < self.$root.offset().top + self.height - 7) {
+//
+//                    self._moveKhuynyushka(dy);
+//                }
+
+
+                //
+
+
+
+                if (e.clientY < self.$root.offset().top + self.height - 7 &&
+                    e.clientY > self.$root.offset().top + 7) {
+
+                    var dy = e.clientY - self.y;
+
+                    self.y = e.clientY;
+                    self._moveKhuynyushka(dy);
+                }
+
+
+            }
+            e.cancelBubble = true;
+            e.stopPropagation();
+            return false;
+
+        },
+
+        _moveKhuynyushka:function (dy) {
+            var self = this,
+                y;
+
+
+            var cy = parseInt(self.khuynyushka.getAttribute("cy"));
+
+
+            if (dy > 0) {
+                if (cy <= (self.height - 10)) {
+                    y = cy + dy;
+                }
+                else if (cy > (self.height - 8)) {
+                    y = (self.height - 10);
+                }
+            } else if (dy < 0) {
+                if (cy >= 10) {
+                    y = cy + dy;
+                }
+                else if (cy < 8) {
+                    y = 10;
+                }
+            }
+
+
+            if (y) {
+                self.khuynyushka.setAttribute("cy", y);
+            }
+
+
+        },
+
+        _scrollContent:function (cy) {
+            var self = this;
+
+            var percent = self._definePercent(cy);
+            var percentModule = Math.sqrt(percent * percent);
+
+            //var v = ( percentModule * (self.scrollHeight) ) / 3000;
+
+
+            var v = Math.pow(Math.E, percentModule * (Math.log(self.scrollHeight / 100) / 45));
+            // а 60 это 100 с поправкой на хуй знает что
+            // 45 это 50 с поправкой на пологость графика
+
+            if (percent > 0) {
+
+
+                self._executeNegScrolling(v);
+
+
+            } else if (percent < 0) {
+                self._executePosScrolling(v);
+            }
+
+
+        },
+
+        _executeNegScrolling:function (v) {
+            var self = this;
+
+            var maxTop = self.scrollHeight - self.height;
+
+            var top = parseInt(self.$contentContainer.css("top")) * -1;
+
+            if (top < maxTop) {
+
+                self.$contentContainer.css({
+                    top:"-=" + v
+                });
+
+            }
+
+            else {
+                self.$contentContainer.css({
+                    top:-maxTop
+                });
+                // тут можно колбечить функцию по завершению скроллинга, например
+
+            }
+        },
+
+        _executePosScrolling:function (v) {
+            var self = this;
+
+            var minTop = 0;
+
+            var top = parseInt(self.$contentContainer.css("top")) * -1;
+
+            if (top > minTop) {
+
+                self.$contentContainer.css({
+                    top:"+=" + v
+                });
+
+            }
+
+            else {
+                self.$contentContainer.css({
+                    top:0
+                });
+                // тут можно колбечить функцию по завершению скроллинга, например
+            }
+        },
+
+        _definePercent:function (y) {
+            var self = this;
+
+            return ( ( y * 100 ) / self.height ) - 50;
+        },
+
+        _scrollingStop:function (e) {
+            var self = this;
+            self.isScrollingInProcess = false;
+            var e = e || window.event;
+
+            self._returnKhuynyushka();
+
+            clearInterval(self.interval);
+
+            e.preventDefault();
+            e.cancelBubble = true;
+            e.stopPropagation();
+            return false;
+        },
+
+        _returnKhuynyushka:function () {
+            var self = this;
+
+
+            var cy = parseInt(self.khuynyushka.getAttribute("cy"));
+
+            while (cy != self.height / 2) {
+
+                if (cy > self.height / 2) {
+                    cy--;
+
+                }
+                else {
+                    cy++;
+
+                }
+//                self.khuynyushka.setAttribute("cy", cy);
+
+            }
+            self.khuynyushka.setAttribute("cy", cy);
+
+            self.khuynyushka.setAttribute("fill-opacity", "1");
+
+
+        },
+
 
         _test:function () {
             var self = this;
