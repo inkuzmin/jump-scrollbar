@@ -463,8 +463,9 @@ var b = 0;
 
             self.khuynyushka.setAttribute("fill-opacity", "0.5");
 
+        var cy;
 
-            self.interval = setInterval(function () {
+             self.interval = setInterval(function () {
                 cy = parseInt(self.khuynyushka.getAttribute("cy"));
                 self._scrollContent(cy);
 
@@ -571,6 +572,8 @@ var b = 0;
                 self._executePosScrolling(v);
             }
 
+            self.scroll =  -parseInt(self.$contentContainer.css("top"));
+
 
         },
 
@@ -672,7 +675,7 @@ var b = 0;
         _test:function () {
             var self = this;
 
-            console.log(1);
+
         }
 
 
